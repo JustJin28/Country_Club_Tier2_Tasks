@@ -35,8 +35,15 @@ exploring the data, and getting acquainted with the 3 tables. */
 /* Q1: Some of the facilities charge a fee to members, but some do not.
 Write a SQL query to produce a list of the names of the facilities that do. */
 
+SELECT name FROM Facilities 
+WHERE membercost > 0.0;
+
+
 
 /* Q2: How many facilities do not charge a fee to members? */
+
+There are 4 facilities that do not charge members a fee. 
+
 
 
 /* Q3: Write an SQL query to show a list of facilities that charge a fee to members,
@@ -44,9 +51,19 @@ where the fee is less than 20% of the facility's monthly maintenance cost.
 Return the facid, facility name, member cost, and monthly maintenance of the
 facilities in question. */
 
+SELECT facid, name, membercost, monthlymaintenance
+FROM Facilities
+WHERE membercost < monthlymaintenance * 0.20;
+
+
 
 /* Q4: Write an SQL query to retrieve the details of facilities with ID 1 and 5.
 Try writing the query without using the OR operator. */
+
+SELECT * 
+FROM Facilities
+WHERE facid IN (1, 5);
+
 
 
 /* Q5: Produce a list of facilities, with each labelled as
@@ -54,15 +71,41 @@ Try writing the query without using the OR operator. */
 more than $100. Return the name and monthly maintenance of the facilities
 in question. */
 
+SELECT name, monthlymaintenance, 
+       CASE
+           WHEN monthlymaintenance > 100 THEN 'expensive'
+           ELSE 'cheap'
+       END AS Price_category
+FROM Facilities;
+
+
 
 /* Q6: You'd like to get the first and last name of the last member(s)
 who signed up. Try not to use the LIMIT clause for your solution. */
+
+SELECT firstname, surname 
+FROM Members
+WHERE joindate = (
+    SELECT MAX(joindate)
+    FROM Members
+);
+
 
 
 /* Q7: Produce a list of all members who have used a tennis court.
 Include in your output the name of the court, and the name of the member
 formatted as a single column. Ensure no duplicate data, and order by
 the member name. */
+
+SELECT DISTINCT
+    Facilities.name AS court_name,
+    CONCAT(Members.firstname, ' ', Members.surname) AS member_name
+FROM Facilities
+JOIN Bookings ON Facilities.facid = Bookings.facid
+JOIN Members ON Bookings.memid = Members.memid
+WHERE Facilities.name LIKE '%Tennis Court%'
+ORDER BY member_name;
+
 
 
 /* Q8: Produce a list of bookings on the day of 2012-09-14 which
@@ -72,8 +115,60 @@ the guest user's ID is always 0. Include in your output the name of the
 facility, the name of the member formatted as a single column, and the cost.
 Order by descending cost, and do not use any subqueries. */
 
+SELECT 
+    Facilities.name AS facility_name,
+    CONCAT(Members.firstname, ' ', Members.surname) AS member_name,
+    CASE
+        WHEN Bookings.memid = 0 THEN Facilities.guestcost * Bookings.slots
+        ELSE Facilities.membercost * Bookings.slots
+    END AS cost
+FROM 
+    Facilities
+JOIN 
+    Bookings ON Facilities.facid = Bookings.facid
+JOIN 
+    Members ON Bookings.memid = Members.memid
+WHERE 
+    Bookings.starttime LIKE '2012-09-14%' AND
+    (
+        (Bookings.memid = 0 AND Facilities.guestcost * Bookings.slots > 30) OR
+        (Bookings.memid != 0 AND Facilities.membercost * Bookings.slots > 30)
+    )
+ORDER BY 
+    cost DESC;
+
+
+
 
 /* Q9: This time, produce the same result as in Q8, but using a subquery. */
+
+SELECT 
+    facility_name,
+    member_name,
+    cost
+FROM (
+    SELECT 
+        Facilities.name AS facility_name,
+        CONCAT(Members.firstname, ' ', Members.surname) AS member_name,
+        CASE
+            WHEN Bookings.memid = 0 THEN Facilities.guestcost * Bookings.slots
+            ELSE Facilities.membercost * Bookings.slots
+        END AS cost
+    FROM 
+        Facilities
+    JOIN 
+        Bookings ON Facilities.facid = Bookings.facid
+    JOIN 
+        Members ON Bookings.memid = Members.memid
+    WHERE 
+        Bookings.starttime LIKE '2012-09-14%'
+) AS subquery
+WHERE 
+    cost > 30
+ORDER BY 
+    cost DESC;
+
+
 
 
 /* PART 2: SQLite
@@ -86,11 +181,30 @@ QUESTIONS:
 The output of facility name and total revenue, sorted by revenue. Remember
 that there's a different cost for guests and members! */
 
+query10 = 'SELECT Facilities.name, SUM(CASE WHEN Bookings.memid = 0 THEN Bookings.slots*Facilities.guestcost ELSE Bookings.slots * Facilities.membercost END) AS total_revenue FROM Facilities JOIN Bookings ON Facilities.facid = Bookings.facid GROUP BY Facilities.name HAVING total_revenue < 1000 ORDER BY total_revenue;'
+
+df10 = pd.read_sql_query(query10, conn)
+
+
+
 /* Q11: Produce a report of members and who recommended them in alphabetic surname,firstname order */
+
+query_M = 'SELECT Member1.surname ||", "|| Member1.firstname AS member_name, Member2.surname ||","|| Member2.firstname AS recommender_name FROM Members Member1 LEFT JOIN Members Member2 ON Member1.recommendedby = Member2.memid ORDER BY Member1.surname, Member1.firstname'
+
+df_M = pd.read_sql_query(query_M, conn)
+
 
 
 /* Q12: Find the facilities with their usage by member, but not guests */
 
+query_U = 'SELECT Facilities.name AS facility_name, COUNT(Bookings.bookid) AS member_usage FROM Facilities JOIN Bookings ON Facilities.facid = Bookings.facid WHERE Bookings.memid != 0 GROUP BY Facilities.name ORDER BY member_usage DESC;'
+
+df_U = pd.read_sql_query(query_U, conn)
+
+
 
 /* Q13: Find the facilities usage by month, but not guests */
 
+query_USE = 'SELECT Facilities.name AS facility_name, strftime("%Y-%m", Bookings.starttime) AS month, COUNT(Bookings.bookid) AS usage_count FROM Facilities JOIN Bookings ON Facilities.facid = Bookings.facid WHERE Bookings.memid != 0 GROUP BY Facilities.name ORDER BY month;'
+
+df_USE = pd.read_sql_query(query_USE, conn)
